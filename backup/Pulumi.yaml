@@ -1,0 +1,7 @@
+name: pulumi_aws_backup
+runtime: go
+description: Back up AWS resources with Pulumi and AWS Backup
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: ""
