@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/dynamodb"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -42,7 +43,6 @@ func main() {
 			ReadCapacity: pulumi.Int(20),
 			Tags: pulumi.StringMap{
 				"Environment": pulumi.String("dev"),
-				"Name":        pulumi.String("dynamodb-table-1"),
 			},
 			Ttl: &dynamodb.TableTtlArgs{
 				AttributeName: pulumi.String("TimeToExist"),
@@ -50,6 +50,26 @@ func main() {
 			},
 			WriteCapacity: pulumi.Int(20),
 		})
+		// Create the AWS KMS key to encrypt backups.
+		kmsKey, err := kms.NewKey(ctx, "backup-key", &kms.KeyArgs{
+			DeletionWindowInDays: pulumi.Int(10),
+			Description:          pulumi.String("KMS key to encrypt backups"),
+			EnableKeyRotation:    pulumi.Bool(true),
+			KeyUsage:             pulumi.String("ENCRYPT_DECRYPT"),
+			MultiRegion:          pulumi.Bool(false),
+			Tags: pulumi.StringMap{
+				"Environment": pulumi.String("dev"),
+			},
+		})
+		_, err = kms.NewAlias(ctx, "alias/backup-key", &kms.AliasArgs{
+			TargetKeyId: kmsKey.KeyId,
+		})
+		// Provide a Backup Vault.
+
+		// Define a Backup Plan.
+
+		// Assign AWS resources to a backup plan.
+		//
 		if err != nil {
 			return err
 		}
