@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/backup"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -44,14 +45,10 @@ func main() {
 			Tags: pulumi.StringMap{
 				"Environment": pulumi.String("dev"),
 			},
-			Ttl: &dynamodb.TableTtlArgs{
-				AttributeName: pulumi.String("TimeToExist"),
-				Enabled:       pulumi.Bool(false),
-			},
 			WriteCapacity: pulumi.Int(20),
 		})
 		// Create the AWS KMS key to encrypt backups.
-		kmsKey, err := kms.NewKey(ctx, "backup-key", &kms.KeyArgs{
+		kmsKey, err := kms.NewKey(ctx, "demo-kms-key", &kms.KeyArgs{
 			DeletionWindowInDays: pulumi.Int(10),
 			Description:          pulumi.String("KMS key to encrypt backups"),
 			EnableKeyRotation:    pulumi.Bool(true),
@@ -61,13 +58,35 @@ func main() {
 				"Environment": pulumi.String("dev"),
 			},
 		})
-		_, err = kms.NewAlias(ctx, "alias/backup-key", &kms.AliasArgs{
+		_, err = kms.NewAlias(ctx, "alias/demo-kms-key", &kms.AliasArgs{
 			TargetKeyId: kmsKey.KeyId,
 		})
 		// Provide a Backup Vault.
-
+		vault, err := backup.NewVault(ctx, "demo-backup-vault", &backup.VaultArgs{
+			KmsKeyArn:    kmsKey.Arn,
+			ForceDestroy: pulumi.Bool(true),
+			Tags: pulumi.StringMap{
+				"Environment": pulumi.String("dev"),
+			},
+		})
 		// Define a Backup Plan.
-
+		plan, err := backup.NewPlan(ctx, "demo-backup-plan", &backup.PlanArgs{
+			Rules: backup.PlanRuleArray{
+				&backup.PlanRuleArgs{
+					RuleName:         pulumi.String("DemoDailyBackups"),
+					TargetVaultName:  vault.Name,
+					Schedule:         pulumi.String("cron(0 12 * * ? *)"),
+					StartWindow:      pulumi.Int(480),
+					CompletionWindow: pulumi.Int(10080),
+					Lifecycle: &backup.PlanRuleLifecycleArgs{
+						DeleteAfter: pulumi.Int(14),
+					},
+				},
+			},
+			Tags: pulumi.StringMap{
+				"Environment": pulumi.String("dev"),
+			},
+		})
 		// Assign AWS resources to a backup plan.
 		//
 		if err != nil {
@@ -75,6 +94,7 @@ func main() {
 		}
 		// Export output data.
 		ctx.Export("demoTableArn", tbl.Arn)
+		ctx.Export("planId", plan.ID())
 		return nil
 	})
 
