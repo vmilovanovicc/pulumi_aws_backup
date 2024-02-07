@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/backup"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/dynamodb"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -87,14 +88,46 @@ func main() {
 				"Environment": pulumi.String("dev"),
 			},
 		})
+		// IAM Role that AWS Backup uses to authenticate when restoring and backing up resources.
+		assumeRole, err := iam.GetPolicyDocument(ctx, &iam.GetPolicyDocumentArgs{
+			Statements: []iam.GetPolicyDocumentStatement{
+				{
+					Effect: pulumi.StringRef("Allow"),
+					Principals: []iam.GetPolicyDocumentStatementPrincipal{
+						{
+							Type: "Service",
+							Identifiers: []string{
+								"backup.amazonaws.com",
+							},
+						},
+					},
+					Actions: []string{
+						"sts:AssumeRole",
+					},
+				},
+			},
+		}, nil)
+		backupRole, err := iam.NewRole(ctx, "demo-backup-iam-role", &iam.RoleArgs{
+			AssumeRolePolicy: pulumi.String(assumeRole.Json),
+			Tags: pulumi.StringMap{
+				"Environment": pulumi.String("dev"),
+			},
+		})
+		_, err = iam.NewRolePolicyAttachment(ctx, "demo-role-policy-attachment", &iam.RolePolicyAttachmentArgs{
+			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"),
+			Role:      backupRole.Name,
+		})
 		// Assign AWS resources to a backup plan.
-		//
+		_, err = backup.NewSelection(ctx, "demo-backup-selection", &backup.SelectionArgs{
+			IamRoleArn: backupRole.Arn,
+			PlanId:     plan.ID(),
+			Resources: pulumi.StringArray{
+				tbl.Arn,
+			},
+		})
 		if err != nil {
 			return err
 		}
-		// Export output data.
-		ctx.Export("demoTableArn", tbl.Arn)
-		ctx.Export("planId", plan.ID())
 		return nil
 	})
 
