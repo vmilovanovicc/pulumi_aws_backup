@@ -80,7 +80,8 @@ func main() {
 					StartWindow:      pulumi.Int(480),
 					CompletionWindow: pulumi.Int(10080),
 					Lifecycle: &backup.PlanRuleLifecycleArgs{
-						DeleteAfter: pulumi.Int(14),
+						ColdStorageAfter: pulumi.Int(7),
+						DeleteAfter:      pulumi.Int(97),
 					},
 				},
 			},
